@@ -194,6 +194,9 @@ CREATE TABLE deliveries (
     distance_km  NUMERIC(6,2) NOT NULL,
     fee_rule_id  INT REFERENCES delivery_fee_rules(id),
     status       delivery_status NOT NULL DEFAULT 'pending',
+    rider_name   VARCHAR(100),
+    rider_phone  VARCHAR(30),
+    tracking_notes TEXT,
     dispatched_at TIMESTAMPTZ,
     delivered_at  TIMESTAMPTZ
 );
@@ -226,6 +229,7 @@ CREATE TABLE doctors (
     id               BIGSERIAL PRIMARY KEY,
     user_id          BIGINT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     bmdc_reg_no      VARCHAR(30) NOT NULL UNIQUE,
+    degree           VARCHAR(200) NOT NULL DEFAULT 'MBBS',
     bio              TEXT,
     consultation_fee NUMERIC(8,2) NOT NULL DEFAULT 0,
     status           verification_status NOT NULL DEFAULT 'pending',

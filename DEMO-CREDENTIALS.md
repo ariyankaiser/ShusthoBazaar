@@ -7,6 +7,7 @@ These are public local-development accounts, not production credentials. Their p
 | Customer | `customer@shusthobazaar.demo` | `Customer123!` |
 | Seller (Lazz Pharma Dhanmondi) | `seller@shusthobazaar.demo` | `Seller123!` |
 | Seller (Tamanna Pharmacy Mirpur) | `seller2@shusthobazaar.demo` | `Seller2123!` |
+| Doctor (BMDC Verified) | `dr.farhana@shusthobazaar.demo` | `Doctor123!` |
 | Admin | `admin@shusthobazaar.demo` | `Admin123!` |
 
 Never use these credentials for any other service. The API uses JWT sessions and enforces roles, but this seeded demo setup is not intended for production.
