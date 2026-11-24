@@ -1,7 +1,69 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { CheckCircle2, Clock3, MapPin, PackageCheck, Truck } from 'lucide-react';
+import { CheckCircle2, Clock3, FileText, MapPin, PackageCheck, Truck } from 'lucide-react';
 import { api } from '../../services/api';
+import { useAuth } from '../../context/authState';
+import PrescriptionUploader from '../../components/prescription/PrescriptionUploader';
+import { shortDate } from '../../utils/format';
+
+const prescriptionStyles = {
+  pending: 'border-amber-200 bg-amber-50 text-amber-900',
+  approved: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+  rejected: 'border-rose-200 bg-rose-50 text-rose-900',
+};
+
+function PrescriptionPanel({ order, onOrderChange }) {
+  const { user } = useAuth();
+  const [error, setError] = useState('');
+  const prescription = order.prescription;
+
+  if (!order.requiresPrescription) return null;
+  if (!prescription) {
+    return (
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        This order contains prescription-only medicine but has no prescription attached.
+      </div>
+    );
+  }
+
+  const canResubmit = user?.role === 'customer' && prescription.status === 'rejected' && order.status === 'Placed';
+  const resubmit = async (uploaded) => {
+    try {
+      const { order: updatedOrder } = await api.orders.resubmitPrescription(order.id, uploaded.id);
+      onOrderChange(updatedOrder);
+      setError('');
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
+  return (
+    <div className={`mt-6 rounded-2xl border p-5 ${prescriptionStyles[prescription.status]}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <FileText className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="text-sm font-bold">Prescription: {prescription.statusLabel}</p>
+            <p className="mt-1 text-xs opacity-80">{prescription.fileName} · sent {shortDate(prescription.submittedAt)}</p>
+          </div>
+        </div>
+        <a href={`/api/prescriptions/${prescription.id}/file`} target="_blank" rel="noreferrer" className="text-xs font-semibold underline">View file</a>
+      </div>
+      <p className="mt-3 text-sm">
+        {prescription.status === 'pending' && `${order.sellerName} will check your prescription before confirming the order.`}
+        {prescription.status === 'approved' && `${order.sellerName} verified your prescription.`}
+        {prescription.status === 'rejected' && `${order.sellerName} could not accept this prescription: ${prescription.rejectionReason}`}
+      </p>
+      {canResubmit && (
+        <div className="mt-4 rounded-xl bg-white p-3 text-slate-900">
+          <p className="mb-2 text-sm font-semibold">Send a new prescription</p>
+          <PrescriptionUploader compact onUploaded={resubmit} />
+        </div>
+      )}
+      {error && <p role="alert" className="mt-2 text-sm text-rose-700">{error}</p>}
+    </div>
+  );
+}
 
 const steps = [
   { key: 'Placed', label: 'Placed', icon: Clock3 },
@@ -93,7 +155,12 @@ export default function OrderTracking() {
                 Retry mock payment
               </Link>
             )}
+            {isRejected && order.rejectionReason && (
+              <p className="mt-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{order.sellerName} rejected this order: {order.rejectionReason}</p>
+            )}
           </div>
+
+          <PrescriptionPanel order={order} onOrderChange={setOrder} />
 
           <div className="mt-8">
             <h2 className="text-lg font-bold text-slate-900">Items in this order</h2>
@@ -101,8 +168,11 @@ export default function OrderTracking() {
               {order.items.map((item, idx) => (
                 <div key={`${item.name}-${idx}`} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4">
                   <div>
-                    <p className="font-semibold text-slate-900">{item.name}</p>
-                    <p className="text-sm text-slate-500">Quantity: {item.quantity}</p>
+                    <p className="font-semibold text-slate-900">
+                      {item.name}
+                      {item.requiresPrescription && <span className="ml-2 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">Rx</span>}
+                    </p>
+                    <p className="text-sm text-slate-500">Quantity: {item.quantity} · {item.sellerName}</p>
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-slate-900">৳{item.quantity * (item.price || item.unitPrice)}</p>

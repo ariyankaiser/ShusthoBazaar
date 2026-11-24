@@ -101,15 +101,15 @@ export default function Login() {
 
           <div className="mt-8 border-t border-slate-100 pt-5">
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-500">Quick-fill demo accounts</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {demoAccounts.map((account) => (
                 <button
                   type="button"
                   key={account.id}
                   onClick={() => fillAccount(account)}
-                  className="rounded-xl border border-slate-200 px-3 py-2.5 text-left text-xs font-semibold capitalize text-slate-700 transition hover:border-teal-500 hover:bg-teal-50"
+                  className="rounded-xl border border-slate-200 px-3 py-2.5 text-left text-xs font-semibold text-slate-700 transition hover:border-teal-500 hover:bg-teal-50"
                 >
-                  {account.role} account
+                  {account.label || `${account.role[0].toUpperCase()}${account.role.slice(1)} account`}
                 </button>
               ))}
             </div>

@@ -22,33 +22,23 @@ export function ProductProvider({ children }) {
     return () => { active = false; };
   }, []);
 
-  const saveProduct = useCallback((product) => {
-    setProducts((current) => {
-      const exists = current.some((entry) => entry.id === product.id);
-      return exists
-        ? current.map((entry) => (entry.id === product.id ? product : entry))
-        : [product, ...current];
-    });
-  }, []);
-
-  const removeProduct = useCallback((id) => {
-    setProducts((current) => current.filter((product) => product.id !== id));
-  }, []);
-
-  const toggleProductAvailability = useCallback((id) => {
-    setProducts((current) => current.map((product) =>
-      product.id === id ? { ...product, isAvailable: !product.isAvailable } : product,
-    ));
+  // Sellers change inventory through the API; reload the public catalogue afterwards.
+  const refreshProducts = useCallback(async () => {
+    try {
+      const { products: catalogue } = await api.products.list({ limit: 100 });
+      setProducts(catalogue);
+      setError('');
+    } catch (requestError) {
+      setError(requestError.message);
+    }
   }, []);
 
   const value = useMemo(() => ({
     products,
     loading,
     error,
-    saveProduct,
-    removeProduct,
-    toggleProductAvailability,
-  }), [products, loading, error, saveProduct, removeProduct, toggleProductAvailability]);
+    refreshProducts,
+  }), [products, loading, error, refreshProducts]);
 
   return <ProductContext.Provider value={value}>{children}</ProductContext.Provider>;
 }

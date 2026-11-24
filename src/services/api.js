@@ -8,14 +8,15 @@ export class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
+  const isForm = options.body instanceof FormData;
   const response = await fetch(`/api${path}`, {
     ...options,
     credentials: 'include',
     headers: {
-      ...(options.body ? { 'content-type': 'application/json' } : {}),
+      ...(options.body && !isForm ? { 'content-type': 'application/json' } : {}),
       ...options.headers,
     },
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    body: options.body ? (isForm ? options.body : JSON.stringify(options.body)) : undefined,
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
@@ -29,6 +30,14 @@ async function request(path, options = {}) {
 }
 
 const json = (method, body) => ({ method, body });
+
+function withQuery(path, params = {}) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+  }
+  return `${path}${query.size ? `?${query}` : ''}`;
+}
 
 export const api = {
   auth: {
@@ -69,8 +78,29 @@ export const api = {
     get: (id) => request(`/orders/${encodeURIComponent(id)}`),
     updateStatus: (id, status) => request(`/orders/${encodeURIComponent(id)}/status`, json('PATCH', { status })),
     invoice: (id) => request(`/orders/${encodeURIComponent(id)}/invoice`),
+    reject: (id, reason) => request(`/orders/${encodeURIComponent(id)}/reject`, json('POST', { reason })),
+    resubmitPrescription: (id, prescriptionId) =>
+      request(`/orders/${encodeURIComponent(id)}/prescription`, json('POST', { prescriptionId })),
   },
   payments: {
     completeMock: (body) => request('/payments/mock/complete', json('POST', body)),
+  },
+  seller: {
+    stores: () => request('/seller/stores'),
+    dashboard: (params) => request(withQuery('/seller/dashboard', params)),
+    products: (params) => request(withQuery('/seller/products', params)),
+    createProduct: (body) => request('/seller/products', json('POST', body)),
+    updateProduct: (id, body) => request(`/seller/products/${encodeURIComponent(id)}`, json('PATCH', body)),
+    deleteProduct: (id) => request(`/seller/products/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  },
+  prescriptions: {
+    list: () => request('/prescriptions'),
+    upload: (file) => {
+      const form = new FormData();
+      form.append('file', file);
+      return request('/prescriptions', { method: 'POST', body: form });
+    },
+    reviews: (params) => request(withQuery('/prescriptions/reviews', params)),
+    review: (orderId, body) => request(`/prescriptions/reviews/${encodeURIComponent(orderId)}`, json('PATCH', body)),
   },
 };
