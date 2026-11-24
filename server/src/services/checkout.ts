@@ -2,12 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { db } from '../../db/index.js';
 import { config } from '../../config/index.js';
 import { AppError } from '../middleware/errors.js';
-import { parseAddressId } from '../utils/ids.js';
+import { parseAddressId, parsePrescriptionId } from '../utils/ids.js';
 import { calculateDiscount } from './cart.js';
 import { getOrderView } from './orders.js';
+import { assertCustomerPrescription } from './prescriptions.js';
 
-export function createOrdersFromCart(userId, { addressId, paymentMethod }) {
+export function createOrdersFromCart(userId, { addressId, paymentMethod, prescriptionId = undefined }) {
   const addressInternalId = parseAddressId(addressId);
+  const prescriptionInternalId = prescriptionId ? parsePrescriptionId(prescriptionId) : null;
   const checkoutReference = `SB-CHECKOUT-${randomUUID()}`;
   const transaction = db.transaction(() => {
     const cart = db.prepare("SELECT id, coupon_id FROM carts WHERE user_id = ? AND status = 'active'").get(userId);
@@ -19,7 +21,7 @@ export function createOrdersFromCart(userId, { addressId, paymentMethod }) {
 
     const items = db.prepare(`
       SELECT ci.product_id, ci.quantity, p.price, p.stock_qty, p.is_active,
-             p.seller_id, p.name
+             p.seller_id, p.name, p.requires_prescription
       FROM cart_items ci
       JOIN products p ON p.id = ci.product_id
       WHERE ci.cart_id = ?
@@ -29,6 +31,12 @@ export function createOrdersFromCart(userId, { addressId, paymentMethod }) {
     for (const item of items) {
       if (!item.is_active) throw new AppError(409, `${item.name} is no longer available.`);
       if (item.quantity > item.stock_qty) throw new AppError(409, `${item.name} no longer has enough stock.`);
+    }
+    if (items.some((item) => item.requires_prescription)) {
+      if (!prescriptionInternalId) {
+        throw new AppError(422, 'Upload a prescription for the prescription-only medicines in your cart.');
+      }
+      assertCustomerPrescription(prescriptionInternalId, userId);
     }
 
     const cartSubtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -79,6 +87,9 @@ export function createOrdersFromCart(userId, { addressId, paymentMethod }) {
     const updateStock = db.prepare(
       'UPDATE products SET stock_qty = stock_qty - ? WHERE id = ? AND stock_qty >= ? AND is_active = 1',
     );
+    const insertOrderPrescription = db.prepare(
+      "INSERT INTO order_prescriptions (order_id, prescription_id, status) VALUES (?, ?, 'pending')",
+    );
     const orderIds = [];
 
     for (const group of sellerGroups) {
@@ -102,6 +113,10 @@ export function createOrdersFromCart(userId, { addressId, paymentMethod }) {
         const stockResult = updateStock.run(item.quantity, item.product_id, item.quantity);
         if (!stockResult.changes) throw new AppError(409, `${item.name} no longer has enough stock.`);
         insertOrderItem.run(orderId, item.product_id, item.quantity, item.price);
+      }
+      // Each pharmacy selling prescription-only items gets its own review of the prescription.
+      if (group.items.some((item) => item.requires_prescription)) {
+        insertOrderPrescription.run(orderId, prescriptionInternalId);
       }
     }
 

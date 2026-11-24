@@ -1,6 +1,12 @@
 import { db } from '../../db/index.js';
 import { AppError } from '../middleware/errors.js';
-import { orderPublicId } from '../utils/ids.js';
+import { orderPublicId, publicPrescriptionId } from '../utils/ids.js';
+
+export function displayPrescriptionStatus(status) {
+  if (status === 'approved') return 'Approved';
+  if (status === 'rejected') return 'Rejected';
+  return 'Pending Verification';
+}
 
 export function displayOrderStatus(status) {
   const labels = {
@@ -68,6 +74,23 @@ export function getOrderView(orderId) {
     status: displayOrderStatus(entry.status),
     changedAt: entry.changed_at,
   }));
+  const prescriptionRow = db.prepare(`
+    SELECT op.status, op.rejection_reason, op.reviewed_at, op.submitted_at,
+           pr.id AS prescription_id, pr.original_name, pr.file_type
+    FROM order_prescriptions op
+    JOIN prescriptions pr ON pr.id = op.prescription_id
+    WHERE op.order_id = ?
+  `).get(orderId);
+  const prescription = prescriptionRow ? {
+    id: publicPrescriptionId(prescriptionRow.prescription_id),
+    status: prescriptionRow.status,
+    statusLabel: displayPrescriptionStatus(prescriptionRow.status),
+    rejectionReason: prescriptionRow.rejection_reason,
+    reviewedAt: prescriptionRow.reviewed_at,
+    submittedAt: prescriptionRow.submitted_at,
+    fileName: prescriptionRow.original_name,
+    fileType: prescriptionRow.file_type,
+  } : null;
   const paymentMethod = order.payment_method === 'mock'
     ? 'Mock payment'
     : 'Cash on Delivery';
@@ -106,6 +129,9 @@ export function getOrderView(orderId) {
     },
     status: displayOrderStatus(order.status),
     orderStatus: displayOrderStatus(order.status),
+    rejectionReason: order.rejection_reason || null,
+    requiresPrescription: items.some((item) => item.requiresPrescription),
+    prescription,
     statusHistory,
     invoice: order.invoice_no ? { invoiceNo: order.invoice_no, issuedAt: order.invoice_issued_at } : null,
     createdAt: order.placed_at,

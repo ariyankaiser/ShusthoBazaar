@@ -6,7 +6,41 @@ import { db, closeDatabase, migrate } from './index.js';
 const demoAccounts = [
   { role: 'customer', name: 'Aminul Islam', email: 'customer@shusthobazaar.demo', password: 'Customer123!' },
   { role: 'seller', name: 'Nusrat Jahan', email: 'seller@shusthobazaar.demo', password: 'Seller123!' },
+  { role: 'seller', name: 'Tanvir Rahman', email: 'seller2@shusthobazaar.demo', password: 'Seller2123!' },
   { role: 'admin', name: 'ShusthoBazaar Admin', email: 'admin@shusthobazaar.demo', password: 'Admin123!' },
+];
+
+// Demo pharmacies. Seller id 2 keeps the original catalogue; products listed in
+// `productNames` are sold by the second pharmacy so carts can span vendors.
+const pharmacies = [
+  {
+    id: 2,
+    email: 'seller@shusthobazaar.demo',
+    name: 'Lazz Pharma Dhanmondi',
+    license: 'DEMO-DGDA-0002',
+    address: 'Dhanmondi, Dhaka',
+    latitude: 23.7465,
+    longitude: 90.3760,
+  },
+  {
+    id: 3,
+    email: 'seller2@shusthobazaar.demo',
+    name: 'Tamanna Pharmacy Mirpur',
+    license: 'DEMO-DGDA-0010',
+    address: 'Mirpur 10, Dhaka',
+    latitude: 23.8069,
+    longitude: 90.3687,
+    productNames: new Set([
+      'Alatrol 10mg',
+      'Fexo 120mg',
+      'Rhinil 10mg',
+      'Ceevit 250mg',
+      'Becosules',
+      'Zinc 20mg',
+      'Calbo-D',
+      'Povidone-Iodine 10%',
+    ]),
+  },
 ];
 
 const categories = [
@@ -53,7 +87,7 @@ function seed() {
   );
   const insertSeller = db.prepare(
     `INSERT INTO sellers (id, user_id, pharmacy_name, drug_license_no, address_line, city, latitude, longitude, status)
-     VALUES (2, ?, ?, ?, ?, ?, ?, ?, 'approved')`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved')`,
   );
   const insertCategory = db.prepare('INSERT INTO categories (name) VALUES (?)');
   const insertProduct = db.prepare(
@@ -79,18 +113,23 @@ function seed() {
     for (const account of demoAccounts) {
       const passwordHash = bcrypt.hashSync(account.password, 12);
       const result = insertUser.run(roleIds.get(account.role), account.name, account.email, passwordHash, null);
-      userIds.set(account.role, Number(result.lastInsertRowid));
+      userIds.set(account.email, Number(result.lastInsertRowid));
     }
 
-    const sellerId = Number(insertSeller.run(
-      userIds.get('seller'),
-      'Lazz Pharma Dhanmondi',
-      'DEMO-DGDA-0002',
-      'Dhanmondi, Dhaka',
-      'Dhaka',
-      23.7465,
-      90.3760,
-    ).lastInsertRowid);
+    for (const pharmacy of pharmacies) {
+      insertSeller.run(
+        pharmacy.id,
+        userIds.get(pharmacy.email),
+        pharmacy.name,
+        pharmacy.license,
+        pharmacy.address,
+        'Dhaka',
+        pharmacy.latitude,
+        pharmacy.longitude,
+      );
+    }
+    const sellerIdFor = (productName) =>
+      pharmacies.find((pharmacy) => pharmacy.productNames?.has(productName))?.id ?? pharmacies[0].id;
 
     const categoryIds = new Map();
     for (const category of categories) {
@@ -99,7 +138,7 @@ function seed() {
 
     for (const [name, generic, description, price, stock, requiresPrescription, category, image] of products) {
       const productId = Number(insertProduct.run(
-        sellerId,
+        sellerIdFor(name),
         categoryIds.get(category),
         name,
         generic,

@@ -56,6 +56,7 @@ export function publicUser(row: UserRow) {
   const demoIds: Record<string, string> = {
     'customer@shusthobazaar.demo': 'demo-customer',
     'seller@shusthobazaar.demo': 'demo-seller',
+    'seller2@shusthobazaar.demo': 'demo-seller-2',
     'admin@shusthobazaar.demo': 'demo-admin',
   };
   return {

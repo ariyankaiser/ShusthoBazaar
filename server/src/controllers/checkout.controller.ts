@@ -7,6 +7,7 @@ import { parseInput } from '../common/validation.js';
 const checkoutSchema = z.object({
   addressId: z.string().regex(/^addr-\d+$/i),
   paymentMethod: z.enum(['cod', 'mock']),
+  prescriptionId: z.string().regex(/^RX-\d+$/i).optional(),
 });
 
 @Roles('customer')

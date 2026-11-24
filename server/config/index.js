@@ -16,7 +16,11 @@ export const config = {
   dbPath: process.env.DB_PATH
     ? path.resolve(serverDirectory, '..', process.env.DB_PATH)
     : path.resolve(serverDirectory, 'db/shusthobazaar.db'),
+  uploadDir: process.env.UPLOAD_DIR
+    ? path.resolve(serverDirectory, '..', process.env.UPLOAD_DIR)
+    : path.resolve(serverDirectory, 'uploads'),
   deliveryFee: 60,
+  maxPrescriptionBytes: 5 * 1024 * 1024,
 };
 
 export function validateConfig() {

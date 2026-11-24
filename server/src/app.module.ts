@@ -7,6 +7,8 @@ import { AddressesController } from './controllers/addresses.controller.js';
 import { CheckoutController } from './controllers/checkout.controller.js';
 import { OrdersController } from './controllers/orders.controller.js';
 import { PaymentsController } from './controllers/payments.controller.js';
+import { SellerController } from './controllers/seller.controller.js';
+import { PrescriptionsController } from './controllers/prescriptions.controller.js';
 import { AnalyticsController } from './controllers/analytics.controller.js';
 import { AdminController } from './controllers/admin.controller.js';
 import { AuthGuard, RolesGuard } from './security/auth.guards.js';
@@ -20,6 +22,8 @@ import { AuthGuard, RolesGuard } from './security/auth.guards.js';
     CheckoutController,
     OrdersController,
     PaymentsController,
+    SellerController,
+    PrescriptionsController,
     AnalyticsController,
     AdminController,
   ],

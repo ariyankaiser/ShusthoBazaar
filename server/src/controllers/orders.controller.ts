@@ -1,17 +1,25 @@
-import { Body, Controller, Get, Param, Patch, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Req } from '@nestjs/common';
 import { z } from 'zod';
 import {
   advanceOrderStatus,
   getAuthorizedInvoice,
   getAuthorizedOrder,
   listOrders,
+  rejectOrder,
 } from '../services/orderOperations.js';
-import { parseOrderId } from '../utils/ids.js';
+import { resubmitOrderPrescription } from '../services/prescriptions.js';
+import { parseOrderId, parsePrescriptionId } from '../utils/ids.js';
 import { AuthenticatedRequest, Roles } from '../security/auth.guards.js';
 import { parseInput } from '../common/validation.js';
 
 const statusSchema = z.object({
   status: z.enum(['confirmed', 'out_for_delivery', 'delivered']),
+});
+const rejectSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+const prescriptionSchema = z.object({
+  prescriptionId: z.string().regex(/^RX-\d+$/i),
 });
 
 @Roles('customer', 'seller', 'admin')
@@ -31,6 +39,36 @@ export class OrdersController {
   ) {
     const input = parseInput(statusSchema, body);
     return { order: advanceOrderStatus(parseOrderId(id), input.status, request.auth!) };
+  }
+
+  @Post(':id/reject')
+  @HttpCode(200)
+  @Roles('seller', 'admin')
+  reject(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseInput(rejectSchema, body);
+    return { order: rejectOrder(parseOrderId(id), input.reason, request.auth!) };
+  }
+
+  @Post(':id/prescription')
+  @HttpCode(200)
+  @Roles('customer')
+  resubmitPrescription(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseInput(prescriptionSchema, body);
+    return {
+      order: resubmitOrderPrescription(
+        parseOrderId(id),
+        parsePrescriptionId(input.prescriptionId),
+        request.auth!.id,
+      ),
+    };
   }
 
   @Get(':id/invoice')
