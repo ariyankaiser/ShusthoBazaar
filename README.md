@@ -44,6 +44,7 @@ Copy `.env.example` to `.env`. `.env` is ignored by Git.
 | `SERVER_URL` | API base URL | `http://localhost:3001` |
 | `JWT_SECRET` | JWT signing secret (required) | — |
 | `DB_PATH` | SQLite database file | `server/db/shusthobazaar.db` |
+| `UPLOAD_DIR` | Private folder for uploaded prescriptions (not served statically) | `server/uploads` |
 
 No SSLCommerz credentials are used. The mock payment screen never asks for card numbers, wallet credentials, or PINs.
 
@@ -52,16 +53,39 @@ No SSLCommerz credentials are used. The mock payment screen never asks for card 
 | Role | Email | Password |
 |---|---|---|
 | Customer | `customer@shusthobazaar.demo` | `Customer123!` |
-| Seller | `seller@shusthobazaar.demo` | `Seller123!` |
+| Seller (Lazz Pharma Dhanmondi) | `seller@shusthobazaar.demo` | `Seller123!` |
+| Seller (Tamanna Pharmacy Mirpur) | `seller2@shusthobazaar.demo` | `Seller2123!` |
 | Admin | `admin@shusthobazaar.demo` | `Admin123!` |
 
-These are public local-development accounts. Passwords are bcrypt-hashed in the database, but the values are also included in the frontend for quick-fill; never reuse them or treat this demo as production authentication.
+The second pharmacy and its account are created by the seed. A database created before it was added needs `npm run db:reset` to get them. These are public local-development accounts. Passwords are bcrypt-hashed in the database, but the values are also included in the frontend for quick-fill; never reuse them or treat this demo as production authentication.
 
 ## Payment behavior
 
 Checkout supports Cash on Delivery and a local **Mock payment**. The mock screen has success and decline actions. Results are saved in the `payments` table (`method=mock`, `status=pending|success|failed`); repeated success is idempotent and a failed mock can be retried. COD payments become successful when an authorized seller/admin marks the order delivered.
 
 For multi-seller carts, checkout creates one order per seller and applies the flat ৳60 delivery fee to each seller order. Coupon discounts are calculated server-side and allocated proportionally across those orders. Prices and totals are sent to the frontend in Taka and stored in SQLite as integer paisa.
+
+## Multi-vendor sellers
+
+Each product belongs to one pharmacy (`products.seller_id`). The seed creates two pharmacies: Lazz Pharma Dhanmondi (14 products) and Tamanna Pharmacy Mirpur (8 products), so one cart can span vendors and checkout splits it into one order per pharmacy.
+
+The seller console (`/seller/*`) is backed by the API:
+
+- **Dashboard**: paid earnings, earnings awaiting payment (COD not yet delivered, unpaid mock), open/new/delivered/rejected orders, orders waiting on a prescription check, low-stock alerts, top products and six months of sales.
+- **Products**: create, edit price/stock/reorder level/category/Rx flag, hide or list, and delete. A product with order history cannot be deleted, only hidden.
+- **Orders**: a seller sees and acts on only its own pharmacy's orders. It can advance the status, or reject a placed/confirmed order with a reason the customer sees; rejection returns the units to stock.
+
+Admins use the same screens with a pharmacy picker and can view the whole marketplace. Seller self-registration and admin approval of pharmacies are not part of this feature.
+
+## Prescription upload and verification
+
+Products marked prescription-only add a **Prescription** step to checkout. The customer drags in or picks a JPEG, PNG or PDF (5 MB max), previews it, uploads it, or chooses one they uploaded before. Checkout is refused without one.
+
+- The server identifies the file from its content (magic bytes), not its name or MIME type, stores it under a random name in `UPLOAD_DIR`, and serves it only through `GET /api/prescriptions/:id/file` to its owner, admins, and the pharmacies whose orders it is attached to.
+- Each pharmacy order with Rx items gets its own review (`order_prescriptions`), so in a multi-pharmacy cart every pharmacy checks the prescription for its own items.
+- A seller cannot confirm an order with Rx items until it approves the prescription. Rejecting the prescription requires a reason; the customer sees it on the order page and can send a new prescription for another review. The seller can also reject the whole order.
+
+Verification is a manual check by pharmacy staff; the platform does not validate prescriptions medically.
 
 ## API
 
@@ -92,6 +116,21 @@ All endpoints return JSON except that the mock payment screen is a frontend rout
 | `PATCH` | `/api/orders/:id/status` | Seller/admin advances `placed` → `confirmed` → `out_for_delivery` → `delivered` |
 | `GET` | `/api/orders/:id/invoice` | Generate if needed and return invoice JSON |
 | `POST` | `/api/payments/mock/complete` | Persist mock `{ "checkoutReference": "...", "result": "success" }` or `"failed"` |
+| `POST` | `/api/orders/:id/reject` | Seller/admin rejects a placed or confirmed order `{ "reason": "..." }` and restocks it |
+| `POST` | `/api/orders/:id/prescription` | Customer attaches a new prescription `{ "prescriptionId": "RX-000002" }` after a rejection |
+| `GET` | `/api/seller/stores` | Admin: list pharmacies |
+| `GET` | `/api/seller/dashboard?sellerId=` | Seller (own pharmacy) or admin (one or all): metrics and earnings |
+| `GET` | `/api/seller/products?sellerId=` | Seller/admin inventory, including hidden products |
+| `POST` | `/api/seller/products` | Create a product (admins must pass `sellerId`) |
+| `PATCH` | `/api/seller/products/:id` | Update price, stock, reorder level, Rx flag, listing, etc. |
+| `DELETE` | `/api/seller/products/:id` | Delete a product that has never been ordered |
+| `POST` | `/api/prescriptions` | Customer uploads `multipart/form-data` field `file` (JPEG/PNG/PDF, 5 MB) |
+| `GET` | `/api/prescriptions` | Customer's uploaded prescriptions and their review results |
+| `GET` | `/api/prescriptions/:id/file` | The file, for its owner, linked pharmacies and admins |
+| `GET` | `/api/prescriptions/reviews?status=` | Seller/admin verification queue |
+| `PATCH` | `/api/prescriptions/reviews/:orderId` | Seller/admin `{ "decision": "approved" }` or `{ "decision": "rejected", "reason": "..." }` |
+
+`POST /api/checkout` also accepts `prescriptionId`, which is required when the cart contains prescription-only products.
 
 The example request collection in [`api.http`](./api.http) covers the API. Seed coupons are `WELCOME10` (10% off, ৳50 minimum) and `SAVE50` (৳50 off, ৳200 minimum).
 
@@ -99,7 +138,9 @@ The example request collection in [`api.http`](./api.http) covers the API. Seed 
 
 `server/db/schema.sql` is the SQLite schema adapted from [`shusthobazaar_schema.sql`](./shusthobazaar_schema.sql). It contains only the tables used for accounts, catalogue, carts, orders, payment, and invoices. As agreed for frontend compatibility, it adds `recipient`, `phone`, and `postal_code` to addresses, `coupon_id` to carts, and `checkout_reference` to payments. Address coordinates default to a Dhaka map point because the existing form does not collect coordinates.
 
-SQLite foreign keys and WAL mode are enabled on the server connection. Seed data includes the three demo roles/accounts, six categories, 22 products, local image paths, and two coupons.
+Prescription tables live in `server/db/migrations/001_prescriptions.sql`. Unlike the reference schema, the review status is stored per order in `order_prescriptions` (one review per pharmacy) rather than on `prescriptions`. `orders.rejection_reason` was added for seller rejections. Migrations are idempotent and run on every start, so an existing database is upgraded in place.
+
+SQLite foreign keys and WAL mode are enabled on the server connection. Seed data includes the three demo roles, four demo accounts (two sellers), two pharmacies, six categories, 22 products, local image paths, and two coupons.
 
 ## Project structure
 
@@ -126,4 +167,4 @@ SQLite foreign keys and WAL mode are enabled on the server connection. Seed data
 
 ## Not implemented
 
-Real SSLCommerz integration, prescriptions, doctors, appointments, notifications, analytics, admin verification, and seller dashboard APIs are intentionally out of scope. The seller order screen only uses the API needed to advance tracking status.
+Real SSLCommerz integration, doctors, appointments, notifications, analytics exports, seller self-registration, and admin verification of pharmacies are intentionally out of scope. Rejecting an order does not refund a successful mock payment.
