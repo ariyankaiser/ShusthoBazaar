@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { BarChart3, LayoutDashboard, Package, ShieldCheck, ShoppingCart, Users } from 'lucide-react';
+import { BarChart3, FileCheck, LayoutDashboard, Package, ShieldCheck, ShoppingCart, Users } from 'lucide-react';
 import { useAuth } from '../context/authState';
 import { useNavigate } from 'react-router-dom';
 
@@ -7,8 +7,9 @@ const links = [
   { label: 'Seller overview', detail: 'View marketplace activity and seller metrics.', to: '/seller/dashboard', icon: LayoutDashboard },
   { label: 'Product catalogue', detail: 'Review and maintain the demo medicine inventory.', to: '/seller/products', icon: Package },
   { label: 'Order operations', detail: 'Review incoming customer orders and their status.', to: '/seller/orders', icon: ShoppingCart },
-  { label: 'Analytics and reports', detail: 'Sales trends, conversion funnel, and CSV exports.', to: '/admin/analytics', icon: BarChart3 },
-  { label: 'Verification and governance', detail: 'Verify sellers/doctors, manage coupons, and moderate reviews.', to: '/admin/manage', icon: ShieldCheck },
+  { label: 'Prescription queue', detail: 'See prescription reviews across every pharmacy.', to: '/seller/prescriptions', icon: FileCheck },
+  { label: 'Analytics & reports', detail: 'Sales trends, conversion funnel, and CSV exports.', to: '/admin/analytics', icon: BarChart3 },
+  { label: 'Verification & governance', detail: 'Verify sellers/doctors, manage coupons, and moderate reviews.', to: '/admin/manage', icon: ShieldCheck },
 ];
 
 export default function AdminDashboard() {

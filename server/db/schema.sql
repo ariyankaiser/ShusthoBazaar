@@ -116,6 +116,7 @@ CREATE TABLE orders (
   discount_amt INTEGER NOT NULL DEFAULT 0 CHECK (discount_amt >= 0),
   delivery_fee INTEGER NOT NULL DEFAULT 0 CHECK (delivery_fee >= 0),
   total_amt INTEGER NOT NULL CHECK (total_amt >= 0),
+  rejection_reason TEXT,
   placed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_orders_customer ON orders(customer_id);

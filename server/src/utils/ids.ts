@@ -30,3 +30,22 @@ export function publicProductId(id) {
 export function publicAddressId(id) {
   return `addr-${id}`;
 }
+
+export const parseSellerId = (value) => parsePrefixedId(value, 's', 'seller ID');
+export const parseCategoryId = (value) => parsePrefixedId(value, 'c', 'category ID');
+
+export function publicSellerId(id) {
+  return `s${String(id).padStart(3, '0')}`;
+}
+
+export function publicPrescriptionId(id) {
+  return `RX-${String(id).padStart(6, '0')}`;
+}
+
+export function parsePrescriptionId(value) {
+  const match = /^RX-(\d+)$/i.exec(String(value));
+  if (!match) throw new AppError(400, 'Invalid prescription ID.');
+  const id = Number(match[1]);
+  if (!Number.isSafeInteger(id) || id < 1) throw new AppError(400, 'Invalid prescription ID.');
+  return id;
+}

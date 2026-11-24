@@ -6,6 +6,7 @@
 @addressId = addr-1
 @orderId = SB-000001
 @checkoutReference = SB-CHECKOUT-00000000-0000-0000-0000-000000000000
+@prescriptionId = RX-000001
 
 ### Health
 GET {{baseUrl}}/health
@@ -158,3 +159,114 @@ Content-Type: application/json
 ### Get/generate invoice JSON
 GET {{baseUrl}}/orders/{{orderId}}/invoice
 Cookie: {{customerCookie}}
+
+### Reject an order with a reason (seller/admin; restocks the items)
+POST {{baseUrl}}/orders/{{orderId}}/reject
+Cookie: {{sellerCookie}}
+Content-Type: application/json
+
+{
+  "reason": "Out of stock at this branch"
+}
+
+### Seller dashboard (admins may add ?sellerId=s003)
+GET {{baseUrl}}/seller/dashboard
+Cookie: {{sellerCookie}}
+
+### Seller inventory, including hidden products
+GET {{baseUrl}}/seller/products
+Cookie: {{sellerCookie}}
+
+### Create a product (admins must also send "sellerId": "s002")
+POST {{baseUrl}}/seller/products
+Cookie: {{sellerCookie}}
+Content-Type: application/json
+
+{
+  "name": "Napa Syrup",
+  "generic": "Paracetamol 120mg/5ml",
+  "categoryId": "c1",
+  "price": 45,
+  "stock": 30,
+  "lowStockThreshold": 5,
+  "requiresPrescription": false,
+  "image": "/images/napa-extra-paracetamol-box-and-tablet-strip.webp"
+}
+
+### Update price, stock or listing
+PATCH {{baseUrl}}/seller/products/{{productId}}
+Cookie: {{sellerCookie}}
+Content-Type: application/json
+
+{
+  "price": 36,
+  "stock": 140,
+  "isAvailable": true
+}
+
+### Delete a product that has never been ordered
+DELETE {{baseUrl}}/seller/products/p023
+Cookie: {{sellerCookie}}
+
+### Upload a prescription (JPEG, PNG or PDF, max 5 MB)
+POST {{baseUrl}}/prescriptions
+Cookie: {{customerCookie}}
+Content-Type: multipart/form-data; boundary=rx
+
+--rx
+Content-Disposition: form-data; name="file"; filename="prescription.png"
+Content-Type: image/png
+
+< ./public/logo.png
+--rx--
+
+### My prescriptions
+GET {{baseUrl}}/prescriptions
+Cookie: {{customerCookie}}
+
+### Checkout a cart with prescription-only products
+POST {{baseUrl}}/checkout
+Cookie: {{customerCookie}}
+Content-Type: application/json
+
+{
+  "addressId": "{{addressId}}",
+  "paymentMethod": "cod",
+  "prescriptionId": "{{prescriptionId}}"
+}
+
+### Seller verification queue (?status=pending|approved|rejected)
+GET {{baseUrl}}/prescriptions/reviews?status=pending
+Cookie: {{sellerCookie}}
+
+### Approve a prescription
+PATCH {{baseUrl}}/prescriptions/reviews/{{orderId}}
+Cookie: {{sellerCookie}}
+Content-Type: application/json
+
+{
+  "decision": "approved"
+}
+
+### Reject a prescription with a reason
+PATCH {{baseUrl}}/prescriptions/reviews/{{orderId}}
+Cookie: {{sellerCookie}}
+Content-Type: application/json
+
+{
+  "decision": "rejected",
+  "reason": "The prescription date is not readable."
+}
+
+### Send a new prescription after a rejection (customer)
+POST {{baseUrl}}/orders/{{orderId}}/prescription
+Cookie: {{customerCookie}}
+Content-Type: application/json
+
+{
+  "prescriptionId": "RX-000002"
+}
+
+### View a prescription file
+GET {{baseUrl}}/prescriptions/{{prescriptionId}}/file
+Cookie: {{sellerCookie}}
